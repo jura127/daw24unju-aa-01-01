@@ -1,20 +1,15 @@
 <?php
 // --- KONFIGURAZIOA ---
-// GARRANTZITSUA: Ez konpartitu gako hau publikoki.
-// .env fitxategitik kargatzen dugu segurtasunagatik.
-$apiKey = "";
-if (file_exists('.env')) {
-    $env = parse_ini_file('.env');
-    $apiKey = $env['OPENAI_API_KEY'] ?? "";
-}
-
+// GARRANTZITSUA: Ez konpartitu gako hau publikoki, norbaitek zure kreditua gastatu dezake eta.
+$apiKey = "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"; 
 $res = $txt = $lang = "";
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $txt = $_POST['testua'] ?? '';
     $lang = $_POST['idioma'] ?? '';
 
-    if (!empty($txt) && !empty($lang) && !empty($apiKey)) {
+    // Baldintza sinplifikatua akatsak ekiditeko
+    if (!empty($txt) && !empty($lang)) {
         $ch = curl_init('https://api.openai.com/v1/chat/completions');
         $data = [
             'model' => 'gpt-4o', 
@@ -42,11 +37,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             if (isset($responseArray['choices'][0]['message']['content'])) {
                 $res = $responseArray['choices'][0]['message']['content'];
             } else {
+                // Errore mezu zehatzagoa OpenAI-k zerbait itzultzen badu (adibidez, krediturik gabe)
                 $res = "Errorea: " . ($responseArray['error']['message'] ?? "Ezezaguna");
             }
         }
-    } elseif (empty($apiKey)) {
-        $res = "Errorea: API Key ez da aurkitu .env fitxategian.";
     }
 }
 ?>

@@ -1,101 +1,206 @@
 <?php
-// --- KONFIGURAZIOA ---
-// GARRANTZITSUA: Ez konpartitu gako hau publikoki, norbaitek zure kreditua gastatu dezake eta.
-$apiKey = "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"; 
-$res = $txt = $lang = "";
 
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    $txt = $_POST['testua'] ?? '';
-    $lang = $_POST['idioma'] ?? '';
+require_once 'vendor/autoload.php';
 
-    // Baldintza sinplifikatua akatsak ekiditeko
-    if (!empty($txt) && !empty($lang)) {
-        $ch = curl_init('https://api.openai.com/v1/chat/completions');
-        $data = [
-            'model' => 'gpt-4o', 
-            'messages' => [
-                ['role' => 'system', 'content' => "Eres un traductor experto. Traduce el texto al idioma solicitado ($lang). Solo devuelve el texto traducido, sin comentarios."],
-                ['role' => 'user', 'content' => $txt]
-            ],
-            'temperature' => 0.2
-        ];
+function is_text($text, $min, $max)
+{
+    $length = strlen($text);
+    return $length >= $min && $length <= $max;
+}
 
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Content-Type: application/json',
-            'Authorization: Bearer ' . $apiKey
-        ]);
+function is_element_selected($value)
+{
+    return !empty($value);
+}
 
-        $apiResponse = curl_exec($ch);
-        
-        if (curl_errno($ch)) {
-            $res = "CURL Errorea: " . curl_error($ch);
-        } else {
-            $responseArray = json_decode($apiResponse, true);
-            if (isset($responseArray['choices'][0]['message']['content'])) {
-                $res = $responseArray['choices'][0]['message']['content'];
-            } else {
-                // Errore mezu zehatzagoa OpenAI-k zerbait itzultzen badu (adibidez, krediturik gabe)
-                $res = "Errorea: " . ($responseArray['error']['message'] ?? "Ezezaguna");
-            }
+$hizkuntzak = [
+    'euskera'   => 'Euskera',
+    'gaztelera' => 'Gaztelera',
+    'ingelesa'  => 'Ingelesa',
+];
+
+$data = [
+    'testua' => '',
+    'hizkuntza' => '',
+];
+
+$errors = [
+    'testua' => '',
+    'hizkuntza' => '',
+];
+
+$message = '';
+$translation = '';
+
+if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    $data['testua'] = $_POST['testua'] ?? '';
+    $data['hizkuntza'] = $_POST['hizkuntza'] ?? '';
+
+    $errors['testua'] = is_text(trim($data['testua']), 1, 500)
+        ? ''
+        : 'Itzuli beharreko testua falta da.';
+
+    $errors['hizkuntza'] = array_key_exists($data['hizkuntza'], $hizkuntzak)
+        ? ''
+        : 'Aukeratu hizkuntza bat.';
+
+    $invalid = implode($errors);
+    if ($invalid) {
+        $message = 'Mesedez, zuzendu ondorengo akatsak.';
+    } else {
+        try {
+            $client = OpenAI::client(getenv('OPENAI_API_KEY'));
+
+            $target_lang = match ($data['hizkuntza']) {
+                'gaztelera' => 'Spanish',
+                'euskera' => 'Basque',
+                'ingelesa' => 'English'
+            };
+
+            $result = $client->chat()->create([
+                'model' => 'gpt-4o',
+                'messages' => [
+                    ['role' => 'system', 'content' => 'Translate the following text into ' . $target_lang . 'be only. Respond with just the translated text.'],
+                    ['role' => 'user', 'content' => $data['testua']],
+                ],
+            ]);
+
+            $translationContent = $result->choices[0]->message->content;
+            $translation = 'Itzulpena:<br>' . nl2br(htmlspecialchars($translationContent));
+        } catch (\Exception $e) {
+            $message = 'Errorea: ' . $e->getMessage();
         }
     }
 }
 ?>
-
 <!DOCTYPE html>
-<html lang="eu">
+<html lang="es">
+
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Testuen itzultzailea</title>
+    <style>
+        body {
+            font-family: "Times New Roman", Times, serif;
+            background-color: #f0f0f0;
+            padding: 20px;
+        }
+
+        h1 {
+            color: #000;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+
+        table {
+            border: 3px solid #777;
+            border-spacing: 5px;
+            background-color: #eee;
+            margin: 0 auto;
+            width: 400px;
+        }
+
+        td {
+            border: 3px solid #777;
+            padding: 5px;
+            background-color: #eee;
+            vertical-align: middle;
+        }
+
+        .col-left {
+            width: 80px;
+            text-align: center;
+            font-weight: bold;
+        }
+
+        .col-right {
+            text-align: left;
+            font-size: 18px;
+        }
+
+        textarea {
+            width: 95%;
+            height: 50px;
+            resize: vertical;
+        }
+
+        button {
+            background-color: #e0e0e0;
+            border: 1px solid #777;
+            padding: 2px 10px;
+            font-weight: bold;
+            font-family: inherit;
+            cursor: pointer;
+            box-shadow: 1px 1px 1px #aaa;
+        }
+
+        .error {
+            color: #d9534f;
+            font-size: 0.9em;
+            display: block;
+            margin-top: 5px;
+        }
+
+        .message {
+            text-align: center;
+            margin-bottom: 15px;
+            font-weight: bold;
+            color: #333;
+        }
+    </style>
 </head>
+
 <body>
 
     <h1>Testuen itzultzailea</h1>
 
-    <form method="post">
-        <table border="1" cellspacing="4" cellpadding="0">
+    <div class="message">
+        <?php if ($message): ?>
+            <span class="error"><?= $message ?></span><br>
+        <?php endif; ?>
+
+        <?php foreach ($errors as $error): ?>
+            <?php if ($error): ?>
+                <span class="error"><?= $error ?></span><br>
+            <?php endif; ?>
+        <?php endforeach; ?>
+    </div>
+
+    <form action="index.php" method="POST">
+        <table>
             <tr>
-                <td><font size="5">Testua</font></td>
-                <td>
-                    <textarea name="testua" style="width:300px; height:80px;" required><?=htmlspecialchars($txt)?></textarea>
+                <td class="col-left">Testua</td>
+                <td class="col-right">
+                    <textarea name="testua"><?= htmlspecialchars($data['testua']) ?></textarea>
                 </td>
             </tr>
+
+            <?php foreach ($hizkuntzak as $key => $label): ?>
+                <tr>
+                    <td class="col-left">
+                        <input type="radio" name="hizkuntza" value="<?= $key ?>" <?= ($data['hizkuntza'] === $key) ? 'checked' : '' ?>>
+                    </td>
+                    <td class="col-right"><?= $label ?></td>
+                </tr>
+            <?php endforeach; ?>
+
             <tr>
-                <td align="right">
-                    <input type="radio" name="idioma" value="Euskera" required <?=($lang=='Euskera')?'checked':''?>>
-                </td>
-                <td><font size="5">Euskera</font></td>
-            </tr>
-            <tr>
-                <td align="right">
-                    <input type="radio" name="idioma" value="Castellano" <?=($lang=='Castellano')?'checked':''?>>
-                </td>
-                <td><font size="5">Castellano</font></td>
-            </tr>
-            <tr>
-                <td align="right">
-                    <input type="radio" name="idioma" value="Inglés" <?=($lang=='Inglés')?'checked':''?>>
-                </td>
-                <td><font size="5">Inglés</font></td>
-            </tr>
-            <tr>
-                <td>&nbsp;</td>
-                <td>
-                    <input type="submit" value="Itzuli">
+                <td class="empty"></td>
+                <td class="col-right">
+                    <button type="submit">Itzuli</button>
                 </td>
             </tr>
         </table>
     </form>
 
-    <?php if ($res): ?>
-        <div style="margin-top:20px; border:1px solid #333; padding:15px; width:400px; background:#f9f9f9;">
-            <font size="4"><strong>Emaitza:</strong></font><br>
-            <font size="5" color="black"><?=htmlspecialchars($res)?></font>
-        </div>
-    <?php endif; ?>
+    <div class="message">
+        <?php if ($translation): ?>
+            <p><?= $translation ?></p>
+        <?php endif; ?>
+    </div>
 
 </body>
+
 </html>

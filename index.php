@@ -35,7 +35,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             };
 
             $result = $client->chat()->create([
-                'model' => 'gpt-5.2,
+                'model' => 'gpt-5.2',
                 'messages' => [
                     ['role' => 'system', 'content' => 'Translate the following text into ' . $target_lang . '. Respond with just the translated text.'],
                     ['role' => 'user', 'content' => $data['testua']],
@@ -196,4 +196,5 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
 </body>
 </html>
+
 
